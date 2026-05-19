@@ -1,0 +1,27 @@
+{
+  "workspaceName": "SmartBankingRiskWorkspace",
+  "workspaceId": "",
+  "lakehouseName": "BankingFraudLakehouse",
+  "lakehouseId": "",
+  "eventhouseName": "BankingRiskEventhouse",
+  "eventhouseId": "",
+  "kqlDatabaseName": "BankingRiskDB",
+  "kqlDatabaseId": "",
+  "eventstreamName": "BankingTransactionStream",
+  "eventstreamId": "",
+  "eventstreamCustomEndpoint": "https://<your-custom-endpoint-id>.eventstream.fabric.microsoft.com/v1/events",
+  "subscriptionId": "",
+  "resourceGroup": "rg-banking-fraud-dev",
+  "capacityName": "bankingfabriccapdev",
+  "capacityId": "",
+  "location": "CentralIndia",
+  "capacitySku": "F2",
+  "fraudAlertEmail": "fraud-alerts@smartbank.com",
+  "simulationSpeedTps": 2,
+  "openaiConfig": {
+    "apiType": "openai",
+    "apiKey": "YOUR_OPENAI_API_KEY",
+    "apiEndpoint": "https://api.openai.com/v1",
+    "modelName": "gpt-4o"
+  }
+}

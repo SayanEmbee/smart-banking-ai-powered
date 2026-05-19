@@ -1,0 +1,102 @@
+// =========================================================================
+// Real-Time Banking Risk & Fraud Intelligence - KQL Database Schema
+// =========================================================================
+
+// 1. Create Target Table for Streaming Telemetry Ingestion
+.create table real_time_transactions (
+    transaction_id: string,
+    customer_id: string,
+    account_number: string,
+    customer_name: string,
+    timestamp: datetime,
+    amount: real,
+    merchant: string,
+    merchant_category: string,
+    payment_channel: string,
+    transaction_type: string,
+    country: string,
+    city: string,
+    state: string,
+    device_type: string,
+    ip_address: string,
+    risk_score: long,
+    is_fraud: long
+)
+
+// 2. Define JSON Schema Ingestion Mapping for Fabric Eventstream Ingestion
+.create-or-alter table real_time_transactions ingestion json mapping "transactions_json_mapping"
+'['
+'    {"column": "transaction_id", "path": "$.transaction_id", "datatype": "string"},'
+'    {"column": "customer_id", "path": "$.customer_id", "datatype": "string"},'
+'    {"column": "account_number", "path": "$.account_number", "datatype": "string"},'
+'    {"column": "customer_name", "path": "$.customer_name", "datatype": "string"},'
+'    {"column": "timestamp", "path": "$.timestamp", "datatype": "datetime"},'
+'    {"column": "amount", "path": "$.amount", "datatype": "real"},'
+'    {"column": "merchant", "path": "$.merchant", "datatype": "string"},'
+'    {"column": "merchant_category", "path": "$.merchant_category", "datatype": "string"},'
+'    {"column": "payment_channel", "path": "$.payment_channel", "datatype": "string"},'
+'    {"column": "transaction_type", "path": "$.transaction_type", "datatype": "string"},'
+'    {"column": "country", "path": "$.country", "datatype": "string"},'
+'    {"column": "city", "path": "$.city", "datatype": "string"},'
+'    {"column": "state", "path": "$.state", "datatype": "string"},'
+'    {"column": "device_type", "path": "$.device_type", "datatype": "string"},'
+'    {"column": "ip_address", "path": "$.ip_address", "datatype": "string"},'
+'    {"column": "risk_score", "path": "$.risk_score", "datatype": "long"},'
+'    {"column": "is_fraud", "path": "$.is_fraud", "datatype": "long"}'
+']'
+
+// =========================================================================
+// Real-Time Analytics & Dashboard KQL Queryset
+// =========================================================================
+
+// Query 1: Executive KPI Summary (Last 1 Hour)
+real_time_transactions
+| where timestamp >= ago(1h)
+| summarize 
+    TotalTransactions = count(),
+    TotalAmount = sum(amount),
+    FraudCount = countif(is_fraud == 1),
+    AvgRiskScore = avg(risk_score)
+| extend FraudPercentage = round((todouble(FraudCount) / TotalTransactions) * 100, 2)
+
+// Query 2: Fraud Occurrences by Region / City
+real_time_transactions
+| where is_fraud == 1
+| summarize FraudCount = count() by city, state, country
+| order by FraudCount desc
+
+// Query 3: Real-Time Fraud Incidents List (For Active Operations View)
+real_time_transactions
+| where is_fraud == 1
+| project timestamp, transaction_id, customer_name, amount, merchant, payment_channel, country, city, risk_score
+| order by timestamp desc
+| take 50
+
+// Query 4: Payment Channel Risk Profile
+real_time_transactions
+| summarize 
+    TxCount = count(), 
+    FraudTxCount = countif(is_fraud == 1),
+    TotalValue = sum(amount) 
+    by payment_channel
+| extend FraudRatio = round((todouble(FraudTxCount) / TxCount) * 100, 2)
+| order by FraudRatio desc
+
+// Query 5: Geolocation Mismatch Detection (India customers transacting overseas)
+real_time_transactions
+| where country != "India" and state == "Overseas"
+| project timestamp, customer_name, transaction_id, country, city, amount, payment_channel, risk_score
+| order by timestamp desc
+
+// Query 6: Transaction Velocity Alerting (Flag multiple transactions in seconds)
+real_time_transactions
+| where timestamp >= ago(10m)
+| summarize TxCount = count() by customer_id, customer_name, bin(timestamp, 1m)
+| where TxCount >= 3
+| order by TxCount desc
+
+// Query 7: High Value Spike Monitoring
+real_time_transactions
+| where amount >= 150000
+| project timestamp, customer_name, amount, merchant, merchant_category, payment_channel, risk_score, is_fraud
+| order by amount desc
