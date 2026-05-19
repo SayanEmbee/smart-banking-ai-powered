@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: smart-banking-ai-powered
+metadata:
+  template: smart-banking-ai-powered@1.0
+requiredVersions:
+  azd: ">= 1.0.0"
+
+# Integrated deployment hooks matching standard Microsoft Solution Accelerators
+hooks:
+  # 1. Before Azure provisioning, set up the F2 capacity and update dynamic config params
+  preprovision:
+    windows:
+      shell: pwsh
+      run: powershell -NoProfile -ExecutionPolicy Bypass -File ./infra/create-capacity.ps1
+      interactive: true
+      continueOnError: false
+  
+  # 2. After capacity setup, deploy all Fabric workspace items (lakehouse, KQL DB, Eventstream, and OneLake data)
+  postprovision:
+    windows:
+      shell: pwsh
+      run: powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/provision-fabric.ps1
+      interactive: true
+      continueOnError: false

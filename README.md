@@ -6,17 +6,35 @@ The architecture and framework are easily extendable across retail banking, fint
 
 ---
 
-## 1. Key Business Use Cases
+## 1. Key Business Use Cases & Simulated Attack Vectors
 
-* **Real-Time Transaction Monitoring:** Continuous operational intelligence over transaction volumes, frequencies, and channels (UPI, POS, ATM, NetBanking).
-* **Heuristics & Anomaly Identification:** Automated real-time detection of high-value spikes, rapid velocity bursts, and midnight accounts takeovers.
-* **AI-Powered Risk Scoring & Explanations:** Predictive risk scores combined with rich, natural language summaries explaining *why* a transaction was flagged and recommending immediate remediation.
-* **Geo-location & Device Monitoring:** Instantly detects when a transaction is initiated from a foreign country or unrecognized device hardware while the customer home profile indicates normal domestic activity.
-* **Executive Command Dashboards:** Centralized monitoring for risk managers, compliance officers, and tier-2 fraud operations teams.
+This solution accelerator simulates a high-fidelity retail banking scenario and detects five distinct real-time financial attack vectors:
+
+| Attack Vector | Simulated Scenario | Risk Flag Trigger | Operational Remediation |
+| :--- | :--- | :--- | :--- |
+| **High Value Spike** | Sudden transaction of ₹2,50,000 via a POS channel | Amount exceeding 10x customer standard deviation | Instant transaction hold; automatic analyst alert |
+| **Foreign Geolocation** | Mumbai customer initiating card transactions from Moscow | Concurrent active sessions across disparate countries | Card block; push-notification request to customer app |
+| **ATM Cash Out Burst** | 5 rapid ATM withdrawals totaling ₹95,000 within 2 minutes | High transaction count velocity per minute bounds | Device restriction; temporary card lockdown |
+| **Midnight Account Takeover** | 3:00 AM mobile bank login and transfer from unrecognized IP | Unorthodox login hour + transaction sequence | Multi-factor authorization request to account phone |
+| **New Device Transfer** | IMPS transaction from unregistered device hardware ID | New device signature with high-value velocity | Step-up security confirmation request |
 
 ---
 
-## 2. Technical Architecture & Data Flow
+## 2. Infrastructure Topology (Bicep Provisioned)
+
+The accelerator automatically deploys and wires up the following enterprise footprint inside Microsoft Fabric and Azure:
+
+| Resource Name | Service Type | SKU / Tier | Purpose |
+| :--- | :--- | :--- | :--- |
+| **`bankingfabriccapdev`** | Microsoft Fabric Capacity | `F2` | Azure host computing all workspace, Lakehouse, and streaming pipelines |
+| **`SmartBankingRiskWorkspace`** | Microsoft Fabric Workspace | `Standard` | Container organizing all banking assets, notebooks, and database schemas |
+| **`BankingFraudLakehouse`** | Microsoft Fabric Lakehouse | `Delta Lake` | Ingests and registers historical data for batch reporting and ML model training |
+| **`BankingRiskDB`** | Fabric Eventhouse (KQL Database) | `Kusto Engine` | Performs sub-second real-time queries and KPI summaries over transaction streams |
+| **`BankingTransactionStream`** | Fabric Eventstream | `Standard` | Dynamic stream capturing, routing, and filtering simulator telemetry events |
+
+---
+
+## 3. Technical Architecture & Data Flow
 
 This accelerator coordinates real-time telemetry streaming and historical batch analytics:
 
@@ -51,7 +69,7 @@ This accelerator coordinates real-time telemetry streaming and historical batch 
 
 ---
 
-## 3. Directory Layout
+## 4. Directory Structure
 
 The workspace is organized to follow standard Microsoft Solution Accelerator governance practices:
 
@@ -76,7 +94,7 @@ smart-banking-ai-powered/
 └── README.md                        # Master documentation (this file)
 ```
 
-## 4. Execution Pathways
+## 5. Execution Pathways
 
 Choose **one** of the two pathways below depending on your goal:
 * **Pathway A: Local Sandbox Mode** (Get running locally in 60 seconds with no Azure setup required).
@@ -125,10 +143,10 @@ Open `src/notebooks/fraud_scoring_ai.ipynb` in VS Code or Jupyter:
 
 ### Pathway B: Automated Cloud Deployment (Azure & Microsoft Fabric)
 
-Use this pathway to deploy the entire, production-grade real-time streaming pipeline inside your active Microsoft Fabric workspace.
+Use this pathway to deploy the entire, production-grade real-time streaming pipeline inside your active Microsoft Fabric workspace. You can choose to deploy either **automatically via the Azure Developer CLI (`azd`)** or **step-by-step via PowerShell**.
 
 ```
-[Azure CLI Login] ──> [.\infra\create-capacity.ps1] ──> [.\scripts\provision-fabric.ps1] ──> [Stream Live Events!]
+[Azure CLI Login] ──> [azd up (One-Click Deploy)] ──> [Stream Live Events!]
 ```
 
 #### Step 1: Authenticate to Your Azure Tenant
@@ -148,15 +166,27 @@ Open [config/accelerator-config.json](file:///C:/Users/015237/Desktop/MyTest/sma
 }
 ```
 
-#### Step 3: Provision Azure Fabric Capacity (via Bicep)
-Open a PowerShell terminal and run the capacity provisioner script:
+---
+
+#### Option 1: One-Click deployment via Azure Developer CLI (Recommended)
+If you have [Azure Developer CLI (`azd`)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) installed, you can provision and deploy the entire environment with a single command:
+```bash
+azd up
+```
+> **What this does:** `azd` reads the [azure.yaml](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/azure.yaml) file, executes `infra/create-capacity.ps1` as a `preprovision` hook to spin up your Bicep F2 capacity, and then runs `scripts/provision-fabric.ps1` as a `postprovision` hook to orchestrate all Fabric assets and OneLake files!
+
+---
+
+#### Option 2: Step-by-Step PowerShell deployment
+If you do not have `azd` installed, execute the steps sequentially in PowerShell:
+
+##### A. Provision Azure Fabric Capacity
 ```powershell
 .\infra\create-capacity.ps1
 ```
-> **What this does:** Automatically signs in, validates/creates your Azure Resource Group, deploys the Microsoft Fabric F2 capacity using your custom **Azure Bicep template** ([infra/main.bicep](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/infra/main.bicep)), assigns your signed-in user principal as capacity admin, and writes the resolved Capacity ID back to your local config automatically.
+> **What this does:** Validates your Resource Group, deploys the Microsoft Fabric F2 capacity using your custom **Azure Bicep template** ([infra/main.bicep](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/infra/main.bicep)), and writes the resolved Capacity ID to your configuration.
 
-#### Step 4: Deploy All Fabric Workspace Items
-Run the primary Fabric orchestrator script:
+##### B. Deploy All Fabric Workspace Items
 ```powershell
 .\scripts\provision-fabric.ps1
 ```
@@ -177,3 +207,36 @@ Now that your cloud environment is ready, hook up your local generator:
    python src/simulator/event_simulator.py
    ```
 6. Open your KQL Database (`BankingRiskDB`), execute the query scripts inside [schema.kql](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/src/definitions/kql/schema.kql), and start visualizing sub-second operational data!
+
+---
+
+## 6. Teardown & Resource Cleanup
+
+To avoid ongoing charges and keep your subscription clean, you can completely teardown the deployed resources:
+
+### Option 1: Automatic Teardown via Azure Developer CLI
+If you deployed your environment using `azd`, simply run:
+```bash
+azd down --purge --force
+```
+> **What this does:** Automatically deletes all Azure and Fabric capacity objects provisioned under Bicep, cleans up resource records, and purges deployment metadata.
+
+### Option 2: Manual Teardown via CLI & Fabric Portal
+1. **Delete Azure Capacity:**
+   ```bash
+   az group delete --name rg-banking-fraud-dev --yes --no-wait
+   ```
+2. **Delete Fabric Workspace:**
+   * Open the Microsoft Fabric portal.
+   * Navigate to `SmartBankingRiskWorkspace` > **Workspace Settings** > **Other** > **Remove this workspace**.
+
+---
+
+## 7. Customization & Industry Extendability
+
+This solution accelerator was built as a modular blueprint. You can easily adapt its architecture and codebase to support other industry telemetry scenarios:
+
+* **Retail & E-commerce:** Update `src/simulator/event_simulator.py` to stream shopping cart events (customer_id, checkout_amount, product_category, discount_codes) and trigger alerts on checkout drop-offs or payment processing delays.
+* **Smart Grid & Utilities:** Adjust telemetry fields to represent grid sensor data (meter_id, voltage, current_frequency, grid_temperature) and configure KQL queries to identify local transformer faults or voltage sags.
+* **Fleet Logistics:** Repurpose the schema to capture real-time route details (vehicle_id, latitude, longitude, speed, fuel_rate, brake_status) to proactively flag dangerous driver behavior or engine overheating.
+
