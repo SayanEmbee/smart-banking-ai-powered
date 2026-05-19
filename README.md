@@ -148,12 +148,12 @@ Open [config/accelerator-config.json](file:///C:/Users/015237/Desktop/MyTest/sma
 }
 ```
 
-#### Step 3: Provision Azure Fabric Capacity
+#### Step 3: Provision Azure Fabric Capacity (via Bicep)
 Open a PowerShell terminal and run the capacity provisioner script:
 ```powershell
 .\infra\create-capacity.ps1
 ```
-> **What this does:** Automatically logs in, creates your Azure Resource Group, provisions a dedicated Fabric F2 capacity (`Sku: F2`), and saves the resolved Capacity ID back to your local config.
+> **What this does:** Automatically signs in, validates/creates your Azure Resource Group, deploys the Microsoft Fabric F2 capacity using your custom **Azure Bicep template** ([infra/main.bicep](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/infra/main.bicep)), assigns your signed-in user principal as capacity admin, and writes the resolved Capacity ID back to your local config automatically.
 
 #### Step 4: Deploy All Fabric Workspace Items
 Run the primary Fabric orchestrator script:

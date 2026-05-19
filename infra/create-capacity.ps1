@@ -88,7 +88,7 @@ if ("microsoft-fabric" -notin $extensions) {
     Write-Host "microsoft-fabric extension is already installed."
 }
 
-# 5. Verify or Create Fabric Capacity (Sku: F2)
+# 5. Verify or Create Fabric Capacity (Sku: F2) via Bicep
 Write-Host "Checking if Fabric Capacity '$capacityName' exists in '$rgName'..."
 $capacityId = ""
 $capacityExists = $false
@@ -104,18 +104,30 @@ try {
 }
 
 if (-not $capacityExists) {
-    Write-Host "Fabric Capacity '$capacityName' not found. Deploying new F2 Capacity in '$location'..."
+    Write-Host "Fabric Capacity '$capacityName' not found. Deploying via Bicep template..."
     Write-Host "This process may take 1-3 minutes..."
     
-    if (-not [string]::IsNullOrEmpty($adminUser)) {
-        $capCreate = az fabric capacity create --name $capacityName --resource-group $rgName --sku $sku --location $location --admin-members $adminUser --query "id" -o tsv
-    } else {
-        # Fallback if user retrieval failed
-        $capCreate = az fabric capacity create --name $capacityName --resource-group $rgName --sku $sku --location $location --query "id" -o tsv
+    $bicepPath = Join-Path $PSScriptRoot "main.bicep"
+    if (-not (Test-Path $bicepPath)) {
+        Write-Error "Could not locate main.bicep at $bicepPath"
     }
     
-    $capacityId = $capCreate
-    Write-Host "Fabric Capacity created successfully!"
+    if ([string]::IsNullOrEmpty($adminUser)) {
+        $adminUser = "admin@smartbank.com"
+    }
+
+    try {
+        $deployResult = az deployment group create `
+            --resource-group $rgName `
+            --template-file $bicepPath `
+            --parameters capacityName=$capacityName skuName=$sku location=$location adminMembers="['$adminUser']" `
+            --query "properties.outputs.capacityId.value" -o tsv
+            
+        $capacityId = $deployResult
+        Write-Host "Fabric Capacity created successfully via Bicep deployment!"
+    } catch {
+        Write-Error "Bicep deployment failed: $_"
+    }
 }
 
 # 6. Save Details back to config file
