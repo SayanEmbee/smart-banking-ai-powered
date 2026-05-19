@@ -76,98 +76,104 @@ smart-banking-ai-powered/
 └── README.md                        # Master documentation (this file)
 ```
 
+## 4. Execution Pathways
+
+Choose **one** of the two pathways below depending on your goal:
+* **Pathway A: Local Sandbox Mode** (Get running locally in 60 seconds with no Azure setup required).
+* **Pathway B: Automated Cloud Deployment** (Provision complete Azure capacity and Fabric workspace items in under 3 minutes).
+
 ---
 
-## 4. Getting Started & Running the Prototype
+### Pathway A: Local Sandbox Mode (60-Second Setup)
 
-Follow these steps in order to set up your banking fraud intelligence environment.
+This mode runs the entire transaction generator and AI notebook locally on your PC. No Azure subscription or active Fabric capacity is needed.
 
-### Step 1: Install Dependencies
-Ensure you have Python 3.10+ installed. Install the accelerator requirements:
+#### Step 1: Install Local Python Packages
+Ensure you have Python 3.10+ installed. Open your terminal in the project root and run:
 ```bash
 pip install -r requirements.txt
 ```
 
-### Step 2: Establish the Historical Fraud Dataset
-Generate the 10,000 credit card transaction historical dataset seaded with anomalies:
+#### Step 2: Generate the Historical Transaction Database
+Create the 10,000 credit card transaction historical CSV containing 2.39% pre-seeded anomalies:
 ```bash
 python data/generate_historical_data.py
 ```
-This writes `data/historical_credit_card_fraud.csv` automatically. You can load this file into your **Fabric Lakehouse** to power batch Power BI reports or machine learning models.
+*Output file: `data/historical_credit_card_fraud.csv` (1.78 MB).*
 
-### Step 3: Run the Live Transaction Simulator (Console/Dry-Run)
-Run the generator in **dry-run mode** to see simulated Indian banking transactions stream dynamically in your console:
+#### Step 3: Launch the Interactive Live Simulator
+Stream simulated Indian banking UPI/ATM/POS transactions directly inside your command line:
 ```bash
 python src/simulator/event_simulator.py --dry-run
 ```
-* **Speed:** Default is 2.0 transactions/second.
-* **Payment Channels Simulated:** UPI (Google Pay/PhonePe style), POS, ATM, Mobile Banking, Internet Banking.
-* **Indian Profiles:** Indian names, home cities (Mumbai, Bengaluru, Delhi, etc.), and UPI transaction bounds.
 
-### Step 4: Interact & Inject Live Fraud During Demo
-While the simulator is running in your console, press these hotkeys to trigger dynamic anomalies:
-* Press **`f`** : Inject a random fraud transaction.
-* Press **`1`** : Inject a **High Value Spike** pattern (e.g. ₹2,50,000 POS transaction).
-* Press **`2`** : Inject a **Foreign Location** pattern (Hyderabad customer transacting in Russia).
-* Press **`3`** : Inject an **ATM Velocity Burst** pattern (rapid high-value ATM withdrawals).
-* Press **`4`** : Inject **Midnight Tor Login** pattern (3:00 AM transaction via Tor node IP).
-* Press **`+`** : Increase transaction rate (up to 30 TPS) to simulate peak spikes.
-* Press **`-`** : Slow down transaction rate.
-* Press **`q`** : Exit simulator safely.
+* **Speed Controls:** Press `+` to accelerate up to 30 TPS, or `-` to slow it down.
+* **Live Fraud Injection Keys:** While the simulator is streaming in the terminal, press any of these keys to inject specific fraud profiles instantly:
+  * Press `1` : Inject a **High-Value Spike** (₹2,50,000 POS transaction).
+  * Press `2` : Inject a **Foreign Location Mismatch** (Hyderabad customer transacting in Moscow).
+  * Press `3` : Inject an **ATM Velocity Burst** (rapid high-value ATM cash-outs).
+  * Press `4` : Inject a **Midnight Account Takeover** (3:00 AM transaction via a Tor node IP).
+  * Press `q` : Safely terminate the stream.
 
-### Step 5: Explore ML Scoring & AI Explanations
-Open the notebook `src/notebooks/fraud_scoring_ai.ipynb` in VS Code or upload it to your **Fabric Workspace**:
-* It loads the historical CSV from OneLake.
-* Trains a `Random Forest Classifier` in scikit-learn.
-* Executes a heuristic-based risk evaluation ruleset.
-* Connects to **OpenAI / Generative AI** to write natural language explanations explaining *why* a transaction was flagged as risky and suggesting mitigation steps (card block, Tier-2 analyst routing).
+#### Step 4: Run the AI Risk-Scoring & Explanations Notebook
+Open `src/notebooks/fraud_scoring_ai.ipynb` in VS Code or Jupyter:
+* Runs machine learning classification using `scikit-learn`.
+* Scores live transactions using combined rules + probability matrices.
+* Generates plain-language fraud operations reasoning blocks (mock reasonings are automatically generated if you do not have an active OpenAI API key).
 
 ---
 
-## 5. 100% Automated Deployment & Provisioning (Azure & Microsoft Fabric)
+### Pathway B: Automated Cloud Deployment (Azure & Microsoft Fabric)
 
-We have provided complete PowerShell deployment automation matching the architecture of the Microsoft accelerators:
+Use this pathway to deploy the entire, production-grade real-time streaming pipeline inside your active Microsoft Fabric workspace.
 
-### Prerequisites for Automation:
-1. Install [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli).
-2. Authenticate to your Azure/Fabric tenant:
-   ```bash
-   az login
-   ```
+```
+[Azure CLI Login] ──> [.\infra\create-capacity.ps1] ──> [.\scripts\provision-fabric.ps1] ──> [Stream Live Events!]
+```
 
-### Step 1: Assign Resource Names in Configuration
-Open [config/accelerator-config.json](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/config/accelerator-config.json) and customize your names:
-* `"resourceGroup"`: The Azure resource group to create.
-* `"capacityName"`: The name of the Fabric F2 capacity to deploy.
-* `"location"`: The Azure region (e.g. `CentralIndia` or `EastUS`).
+#### Step 1: Authenticate to Your Azure Tenant
+Make sure you have [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) installed. Open your terminal and sign in:
+```bash
+az login
+```
 
-### Step 2: Provision Azure & Fabric Capacity
-Execute the capacity provisioning script in PowerShell:
+#### Step 2: Configure Your Resource Names
+Open [config/accelerator-config.json](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/config/accelerator-config.json) and set your custom names:
+```json
+{
+  "subscriptionId": "YOUR_AZURE_SUBSCRIPTION_ID",
+  "resourceGroup": "rg-banking-fraud-dev",
+  "capacityName": "bankingfabriccapdev",
+  "location": "CentralIndia"
+}
+```
+
+#### Step 3: Provision Azure Fabric Capacity
+Open a PowerShell terminal and run the capacity provisioner script:
 ```powershell
 .\infra\create-capacity.ps1
 ```
-This script signs in via the active CLI credentials, creates your Azure Resource Group, provisions a Fabric F2 capacity, and saves the resolved Capacity ID back to your configuration automatically.
+> **What this does:** Automatically logs in, creates your Azure Resource Group, provisions a dedicated Fabric F2 capacity (`Sku: F2`), and saves the resolved Capacity ID back to your local config.
 
-### Step 3: Automatically Provision Fabric Workspace & Assets
+#### Step 4: Deploy All Fabric Workspace Items
 Run the primary Fabric orchestrator script:
 ```powershell
 .\scripts\provision-fabric.ps1
 ```
-This script connects via Fabric Entra tokens and:
-1. Automatically discovers or creates your workspace `SmartBankingRiskWorkspace`.
-2. Automatically assigns the workspace to the Fabric capacity.
-3. Automatically provisions your Lakehouse (`BankingFraudLakehouse`), KQL Database (`BankingRiskDB`), and Eventstream (`BankingTransactionStream`).
-4. Automatically uploads the generated 1.78 MB historical CSV dataset directly to OneLake Storage.
-5. Populates all resolved item IDs back to your local config file!
+> **What this does:** Runs fully authenticated Entra ID Fabric REST API calls to:
+> 1. Create or locate the workspace `SmartBankingRiskWorkspace` and bind it to your capacity.
+> 2. Deploy your Lakehouse (`BankingFraudLakehouse`), KQL Database (`BankingRiskDB`), and Eventstream (`BankingTransactionStream`).
+> 3. Stream the 1.78 MB historical CSV dataset directly into OneLake Storage (`Files/` directory).
+> 4. Save all newly resolved Fabric item IDs back to your config file.
 
-### Step 4: Complete Mappings & Connect Stream
-To connect the live simulator to your newly created Eventstream:
+#### Step 5: Connect Your Live Stream & Run
+Now that your cloud environment is ready, hook up your local generator:
 1. Open the [Microsoft Fabric Portal](https://app.fabric.microsoft.com/).
-2. Navigate to your new workspace `SmartBankingRiskWorkspace`.
-3. Open `BankingTransactionStream` and select the **Custom App** source to retrieve the REST API URL endpoint.
-4. Paste this REST API URL into `"eventstreamCustomEndpoint"` in `config/accelerator-config.json`.
-5. Execute the simulator to stream live transactions directly to Fabric:
+2. Open your new `SmartBankingRiskWorkspace`.
+3. Open `BankingTransactionStream` and select the **Custom App** source node to copy your unique REST API endpoint URL.
+4. Open `config/accelerator-config.json` and paste that URL into the `"eventstreamCustomEndpoint"` field.
+5. Run the simulator to stream live transactions directly into Microsoft Fabric:
    ```bash
    python src/simulator/event_simulator.py
    ```
-
+6. Open your KQL Database (`BankingRiskDB`), execute the query scripts inside [schema.kql](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/src/definitions/kql/schema.kql), and start visualizing sub-second operational data!
