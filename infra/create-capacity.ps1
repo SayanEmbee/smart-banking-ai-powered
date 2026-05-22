@@ -11,9 +11,9 @@
 $ErrorActionPreference = "Stop"
 
 # Define config file path
-$configPath = Join-Path $PSScriptRoot "..`config`accelerator-config.json"
+$configPath = Join-Path $PSScriptRoot "../config/accelerator-config.json"
 if (-not (Test-Path $configPath)) {
-    $configPath = Join-Path $PSScriptRoot "config`accelerator-config.json"
+    $configPath = Join-Path $PSScriptRoot "config/accelerator-config.json"
 }
 
 if (-not (Test-Path $configPath)) {
@@ -28,10 +28,22 @@ Write-Host "--------------------------------------------------"
 Write-Host "Reading settings from $configPath..."
 $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
 
-$subscriptionId = $config.subscriptionId
-$rgName = $config.resourceGroup
+$subscriptionId = $env:AZURE_SUBSCRIPTION_ID
+if ([string]::IsNullOrEmpty($subscriptionId)) {
+    $subscriptionId = $config.subscriptionId
+}
+
+$rgName = $env:AZURE_RESOURCE_GROUP
+if ([string]::IsNullOrEmpty($rgName)) {
+    $rgName = $config.resourceGroup
+}
+
+$location = $env:AZURE_LOCATION
+if ([string]::IsNullOrEmpty($location)) {
+    $location = $config.location
+}
+
 $capacityName = $config.capacityName
-$location = $config.location
 $sku = $config.capacitySku
 
 if ([string]::IsNullOrEmpty($rgName) -or [string]::IsNullOrEmpty($capacityName)) {
@@ -88,52 +100,39 @@ if ("microsoft-fabric" -notin $extensions) {
     Write-Host "microsoft-fabric extension is already installed."
 }
 
-# 5. Verify or Create Fabric Capacity (Sku: F2) via Bicep
-Write-Host "Checking if Fabric Capacity '$capacityName' exists in '$rgName'..."
-$capacityId = ""
-$capacityExists = $false
-try {
-    $capShow = az resource show --resource-group $rgName --name $capacityName --resource-type "Microsoft.Fabric/capacities" --query "id" -o tsv
-    if (-not [string]::IsNullOrEmpty($capShow)) {
-        $capacityId = $capShow
-        $capacityExists = $true
-        Write-Host "Fabric Capacity '$capacityName' already exists."
-    }
-} catch {
-    # Resource doesn't exist, proceed to create
+# 5. Provision / Update Fabric Capacity (Sku: F2) via Bicep
+$bicepPath = Join-Path $PSScriptRoot "main.bicep"
+if (-not (Test-Path $bicepPath)) {
+    Write-Error "Could not locate main.bicep at $bicepPath"
 }
 
-if (-not $capacityExists) {
-    Write-Host "Fabric Capacity '$capacityName' not found. Deploying via Bicep template..."
-    Write-Host "This process may take 1-3 minutes..."
-    
-    $bicepPath = Join-Path $PSScriptRoot "main.bicep"
-    if (-not (Test-Path $bicepPath)) {
-        Write-Error "Could not locate main.bicep at $bicepPath"
-    }
-    
-    if ([string]::IsNullOrEmpty($adminUser)) {
-        $adminUser = "admin@smartbank.com"
-    }
+if ([string]::IsNullOrEmpty($adminUser)) {
+    $adminUser = "admin@smartbank.com"
+}
 
-    try {
-        $deployResult = az deployment group create `
-            --resource-group $rgName `
-            --template-file $bicepPath `
-            --parameters capacityName=$capacityName skuName=$sku location=$location adminMembers="['$adminUser']" `
-            --query "properties.outputs.capacityId.value" -o tsv
-            
-        $capacityId = $deployResult
-        Write-Host "Fabric Capacity created successfully via Bicep deployment!"
-    } catch {
-        Write-Error "Bicep deployment failed: $_"
-    }
+Write-Host "Deploying or updating Fabric Capacity '$capacityName' via Bicep template..."
+Write-Host "This ensures the capacity is fully provisioned and your active user principal ($adminUser) is registered as the Capacity Administrator."
+Write-Host "This process may take 1-3 minutes..."
+
+try {
+    $deployResult = az deployment group create `
+        --resource-group $rgName `
+        --template-file $bicepPath `
+        --parameters capacityName=$capacityName skuName=$sku location=$location adminMembers="['$adminUser']" `
+        --query "properties.outputs.capacityId.value" -o tsv
+        
+    $capacityId = $deployResult
+    Write-Host "Fabric Capacity deployed and updated successfully via Bicep!"
+} catch {
+    Write-Error "Bicep deployment failed: $_"
 }
 
 # 6. Save Details back to config file
 Write-Host "Writing Capacity ID to accelerator-config.json..."
 $config.capacityId = $capacityId
 $config.subscriptionId = $subscriptionId
+$config.resourceGroup = $rgName
+$config.location = $location
 
 $jsonContent = ConvertTo-Json $config -Depth 10
 Set-Content -Path $configPath -Value $jsonContent

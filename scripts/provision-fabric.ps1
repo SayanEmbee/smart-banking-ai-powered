@@ -15,9 +15,9 @@
 $ErrorActionPreference = "Stop"
 
 # Define config file path
-$configPath = Join-Path $PSScriptRoot "..`config`accelerator-config.json"
+$configPath = Join-Path $PSScriptRoot "../config/accelerator-config.json"
 if (-not (Test-Path $configPath)) {
-    $configPath = Join-Path $PSScriptRoot "config`accelerator-config.json"
+    $configPath = Join-Path $PSScriptRoot "config/accelerator-config.json"
 }
 
 if (-not (Test-Path $configPath)) {
@@ -89,6 +89,54 @@ function Invoke-FabricApi {
     }
 }
 
+# Helper: Dynamically resolve Fabric SaaS Capacity GUID from Capacity name or resource ID
+function Get-FabricCapacityGuid {
+    param (
+        [string]$CapacityNameOrId
+    )
+
+    if ([string]::IsNullOrEmpty($CapacityNameOrId)) {
+        return ""
+    }
+
+    # If it's already a GUID format, return it directly!
+    if ($CapacityNameOrId -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+        return $CapacityNameOrId
+    }
+
+    Write-Host "Resolving Fabric SaaS Capacity GUID for capacity name: $CapacityNameOrId..."
+    try {
+        # Fetch capacities using the current Fabric token
+        $capacitiesUri = "https://api.fabric.microsoft.com/v1/capacities"
+        $capacitiesResponse = Invoke-FabricApi -Uri $capacitiesUri -Method "GET"
+        
+        $capacitiesList = $capacitiesResponse.value
+        if ($null -eq $capacitiesList) {
+            $capacitiesList = $capacitiesResponse.Body.value
+        }
+        
+        # Search by display name (or capacity name)
+        $targetCapacity = $capacitiesList | Where-Object { $_.displayName -eq $CapacityNameOrId -or $_.id -eq $CapacityNameOrId }
+        
+        if ($null -ne $targetCapacity) {
+            $resolvedGuid = $targetCapacity.id
+            Write-Host "Successfully resolved Capacity GUID: $resolvedGuid"
+            return $resolvedGuid
+        }
+    } catch {
+        Write-Warning "Failed to resolve Fabric Capacity GUID dynamically: $_"
+    }
+
+    # Fallback: if we can extract the name from an Azure Resource ID path
+    if ($CapacityNameOrId -like "*/providers/Microsoft.Fabric/capacities/*") {
+        $extractedName = $CapacityNameOrId.Split("/")[-1]
+        Write-Host "Extracted capacity name from Resource ID: $extractedName. Retrying resolution..."
+        return Get-FabricCapacityGuid -CapacityNameOrId $extractedName
+    }
+
+    return ""
+}
+
 # 2. Discover or Create Workspace
 Write-Host "Checking if Workspace '$workspaceName' exists..."
 $workspaces = Invoke-FabricApi -Uri "https://api.fabric.microsoft.com/v1/workspaces"
@@ -109,18 +157,44 @@ if ($workspace) {
 }
 $config.workspaceId = $workspaceId
 
-# 3. Assign Workspace to Capacity
+# 3. Assign Workspace to Capacity with GUID resolution and Retries (to handle active directory sync latency)
 if (-not [string]::IsNullOrEmpty($capacityId)) {
-    Write-Host "Assigning Workspace '$workspaceName' to Capacity..."
-    try {
-        $assignBody = @{
-            capacityId = $capacityId
+    $capacityGuid = Get-FabricCapacityGuid -CapacityNameOrId $capacityId
+    if ([string]::IsNullOrEmpty($capacityGuid) -and -not [string]::IsNullOrEmpty($config.capacityName)) {
+        $capacityGuid = Get-FabricCapacityGuid -CapacityNameOrId $config.capacityName
+    }
+    
+    if ([string]::IsNullOrEmpty($capacityGuid)) {
+        Write-Error "Could not resolve a valid 36-character SaaS GUID for Fabric Capacity '$capacityId'."
+    }
+    
+    # Save the resolved SaaS Capacity GUID back to config
+    if ($config.capacityId -ne $capacityGuid) {
+        $config.capacityId = $capacityGuid
+        $jsonContent = ConvertTo-Json $config -Depth 10
+        Set-Content -Path $configPath -Value $jsonContent
+    }
+
+    Write-Host "Assigning Workspace '$workspaceName' to Capacity (GUID: $capacityGuid)..."
+    $retryCount = 3
+    $assigned = $false
+    for ($i = 1; $i -le $retryCount; $i++) {
+        try {
+            $assignBody = @{
+                capacityId = $capacityGuid
+            }
+            $assignUri = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/assignToCapacity"
+            Invoke-FabricApi -Uri $assignUri -Method "POST" -Body $assignBody | Out-Null
+            Write-Host "Workspace assigned to capacity successfully."
+            $assigned = $true
+            break
+        } catch {
+            Write-Warning "Attempt $i to assign workspace to capacity failed. Retrying in 15 seconds..."
+            Start-Sleep -Seconds 15
         }
-        $assignUri = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/assignToCapacity"
-        Invoke-FabricApi -Uri $assignUri -Method "POST" -Body $assignBody | Out-Null
-        Write-Host "Workspace assigned to capacity successfully."
-    } catch {
-        Write-Warning "Could not assign workspace to capacity automatically. You can do this manually in Workspace Settings."
+    }
+    if (-not $assigned) {
+        Write-Error "Failed to assign Workspace to Capacity. Fabric requires your workspace to be bound to an active F-Capacity to deploy premium items like Lakehouses. Please manually assign the workspace '$workspaceName' to the capacity '$capacityGuid' in the Microsoft Fabric Portal (Workspace Settings -> Premium -> Fabric Capacity) before running this script again."
     }
 }
 
@@ -144,24 +218,27 @@ if ($lakehouse) {
     $newLh = Invoke-FabricApi -Uri "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/items" -Method "POST" -Body $lhBody
     $lakehouseId = $newLh.id
     Write-Host "Lakehouse created successfully! (ID: $lakehouseId)"
+    Write-Host "Waiting 15 seconds for OneLake DFS metadata synchronization..."
+    Start-Sleep -Seconds 15
 }
 $config.lakehouseId = $lakehouseId
 
 # 6. Upload Historical CSV directly to OneLake Files
-$csvPath = Join-Path $PSScriptRoot "..`data`historical_credit_card_fraud.csv"
+$csvPath = Join-Path $PSScriptRoot "../data/historical_credit_card_fraud.csv"
 if (-not (Test-Path $csvPath)) {
-    $csvPath = Join-Path $PSScriptRoot "data`historical_credit_card_fraud.csv"
+    $csvPath = Join-Path $PSScriptRoot "data/historical_credit_card_fraud.csv"
 }
 
 if (Test-Path $csvPath) {
     Write-Host "Uploading historical transactions dataset directly to OneLake..."
-    $oneLakeUrl = "https://onelake.dfs.fabric.microsoft.com/$workspaceId/lakehouses/$lakehouseId/Files/historical_credit_card_fraud.csv"
+    # Correct OneLake DFS URL structure: workspaceId/lakehouseId/Files/path
+    $oneLakeUrl = "https://onelake.dfs.fabric.microsoft.com/$workspaceId/$lakehouseId/Files/historical_credit_card_fraud.csv"
     
     try {
         # Initialize the file in OneLake
         $initParams = @{
             Headers = $storageHeaders
-            Uri     = "$oneLakeUrl`?action=create"
+            Uri     = "$oneLakeUrl`?resource=file"
             Method  = "PUT"
         }
         Invoke-RestMethod @initParams | Out-Null
@@ -191,21 +268,39 @@ if (Test-Path $csvPath) {
     }
 }
 
-# 7. Idempotently Create KQL Database (KqlDatabase Item type)
-$kqlDb = $existingItems | Where-Object { $_.displayName -eq $kqlDbName -and $_.type -eq "KqlDatabase" }
+# 7. Idempotently Create Eventhouse & its default KQL Database
+$kqlDb = $existingItems | Where-Object { $_.displayName -eq $kqlDbName -and ($_.type -eq "KQLDatabase" -or $_.type -eq "KqlDatabase") }
 $kqlDbId = ""
+
 if ($kqlDb) {
     $kqlDbId = $kqlDb.id
     Write-Host "KQL Database '$kqlDbName' already exists (ID: $kqlDbId)"
 } else {
-    Write-Host "KQL Database '$kqlDbName' not found. Creating database..."
-    $dbBody = @{
-        displayName = $kqlDbName
-        type        = "KqlDatabase"
+    # Check if the Eventhouse already exists
+    $eventhouse = $existingItems | Where-Object { $_.displayName -eq $kqlDbName -and $_.type -eq "Eventhouse" }
+    if (-not $eventhouse) {
+        Write-Host "Eventhouse '$kqlDbName' not found. Creating Eventhouse..."
+        $ehBody = @{
+            displayName = $kqlDbName
+            type        = "Eventhouse"
+        }
+        $newEh = Invoke-FabricApi -Uri "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/items" -Method "POST" -Body $ehBody
+        Write-Host "Eventhouse created successfully! (ID: $($newEh.id))"
+        Write-Host "Waiting 10 seconds for default child KQL Database to be provisioned..."
+        Start-Sleep -Seconds 10
     }
-    $newDb = Invoke-FabricApi -Uri "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/items" -Method "POST" -Body $dbBody
-    $kqlDbId = $newDb.id
-    Write-Host "KQL Database created successfully! (ID: $kqlDbId)"
+    
+    # Re-fetch items to locate the auto-created child KQL Database
+    Write-Host "Locating the auto-created child KQL Database..."
+    $updatedItems = Invoke-FabricApi -Uri "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/items"
+    $kqlDb = $updatedItems.value | Where-Object { $_.displayName -eq $kqlDbName -and ($_.type -eq "KQLDatabase" -or $_.type -eq "KqlDatabase") }
+    
+    if ($kqlDb) {
+        $kqlDbId = $kqlDb.id
+        Write-Host "Located auto-created KQL Database successfully! (ID: $kqlDbId)"
+    } else {
+        Write-Error "Eventhouse was created, but the default child KQL Database '$kqlDbName' could not be resolved."
+    }
 }
 $config.kqlDatabaseId = $kqlDbId
 

@@ -1,0 +1,20 @@
+# Environment files
+.env
+*.env
+
+# Python virtual environment & cache
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE configurations
+.vscode/
+.idea/
+
+# OS specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

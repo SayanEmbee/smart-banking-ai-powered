@@ -1,0 +1,19 @@
+{
+  "transaction_id": "TXN-123456",
+  "customer_id": "CUST-987654",
+  "account_number": "ACT-112233",
+  "customer_name": "Aarav Sharma",
+  "timestamp": "2026-05-19T13:56:00.000Z",
+  "amount": 2500.50,
+  "merchant": "Amazon",
+  "merchant_category": "Shopping",
+  "payment_channel": "UPI",
+  "transaction_type": "Debit",
+  "country": "India",
+  "city": "Mumbai",
+  "state": "Maharashtra",
+  "device_type": "Mobile",
+  "ip_address": "192.168.1.1",
+  "risk_score": 12,
+  "is_fraud": 0
+}

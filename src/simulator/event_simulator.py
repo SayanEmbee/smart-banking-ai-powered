@@ -34,6 +34,13 @@ try:
 except ImportError:
     HTTP_SUPPORT = False
 
+# Try to import Azure Event Hub SDK dynamically
+try:
+    from azure.eventhub import EventHubProducerClient, EventData
+    EVENTHUB_SUPPORT = True
+except ImportError:
+    EVENTHUB_SUPPORT = False
+
 # Try to import Faker
 try:
     from faker import Faker
@@ -50,7 +57,7 @@ INDIAN_NAMES = [
 ]
 
 payment_channels = ["UPI", "POS", "ATM", "Mobile Banking", "Internet Banking"]
-transaction_types = ["Transfer", "Withdrawal", "Purchase", "Bill Payment"]
+transaction_type = "Debit"  # All outgoing transactions are debit type per schema
 
 indian_cities = [
     {"city": "Mumbai", "state": "Maharashtra"},
@@ -125,17 +132,18 @@ def generate_transaction(inject_fraud=False, fraud_type=None):
     device = customer["home_device"]
     ip = random.choice(ip_subnets) + str(random.randint(2, 254))
     channel = random.choice(payment_channels)
-    txtype = random.choice(transaction_types)
+    txtype = transaction_type  # Fixed as "Debit" per production schema
     
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # ISO-8601 UTC format: 2026-05-19T13:56:00.000Z
+    timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
     if not inject_fraud:
         # NORMAL TRANSACTION
         amount = round(random.uniform(50, 12000), 2)
-        # UPI bias
+        # UPI bias (40% chance of UPI small transaction)
         if random.random() < 0.4:
             channel = "UPI"
-            txtype = "Purchase" if random.random() < 0.7 else "Transfer"
+            txtype = transaction_type  # Always "Debit" per schema
             amount = round(random.uniform(10, 3000), 2)
 
         merchant = random.choice(merchants)
@@ -178,7 +186,7 @@ def generate_transaction(inject_fraud=False, fraud_type=None):
             # Pattern 3: ATM Velocity Spike
             amount = round(random.uniform(45000, 60000), 2)
             channel = "ATM"
-            txtype = "Withdrawal"
+            txtype = transaction_type  # Keep as "Debit" per schema
             merchant_name = "Midnight Cash Outlet"
             category = "ATM Cash Out"
             risk_score = random.randint(82, 95)
@@ -212,8 +220,8 @@ def generate_transaction(inject_fraud=False, fraud_type=None):
         "state": state,
         "device_type": device,
         "ip_address": ip,
-        "risk_score": risk_score,
-        "is_fraud": is_fraud
+        "risk_score": 0,  # Unscored raw transaction telemetry (to be scored by AI notebook!)
+        "is_fraud": 0     # Unscored raw transaction telemetry (to be scored by AI notebook!)
     }
 
 def print_help():
@@ -229,6 +237,23 @@ def print_help():
     print("  [q] : Quit simulator")
     print("--------------------\n")
 
+def load_env(env_path=".env"):
+    """Lightweight, zero-dependency .env file loader."""
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        key, val = line.split("=", 1)
+                        key = key.strip()
+                        val = val.strip().strip('"').strip("'")
+                        os.environ[key] = val
+        except Exception:
+            pass
+
 def main():
     parser = argparse.ArgumentParser(description="Real-Time Banking Transaction Stream Simulator")
     parser.add_argument("--endpoint", type=str, help="Fabric Eventstream API Endpoint URL")
@@ -236,23 +261,31 @@ def main():
     parser.add_argument("--speed", type=float, default=2.0, help="Initial transaction speed in events per second")
     args = parser.parse_args()
 
-    # Determine endpoint from config if not provided in CLI args
+    # Load environment variables from local .env
+    load_env()
+
+    # Determine endpoint from CLI arg, environment, or config
     endpoint = args.endpoint
     if not endpoint and not args.dry_run:
-        config_path = os.path.join("config", "accelerator-config.json")
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, "r") as cfg:
-                    config = json.load(cfg)
-                    endpoint = config.get("eventstreamCustomEndpoint")
-                    if "<your-custom-endpoint-id>" in endpoint:
-                        # Placeholder config, force dry-run unless specified
-                        endpoint = None
-            except Exception:
-                pass
+        # Try environment first
+        endpoint = os.environ.get("EVENTSTREAM_CUSTOM_ENDPOINT")
+        
+        # Try config file fallback
+        if not endpoint or "YOUR_EVENTSTREAM" in endpoint or "<your-custom" in endpoint:
+            config_path = os.path.join("config", "accelerator-config.json")
+            if os.path.exists(config_path):
+                try:
+                    with open(config_path, "r") as cfg:
+                        config = json.load(cfg)
+                        endpoint = config.get("eventstreamCustomEndpoint")
+                        if endpoint and ("YOUR_EVENTSTREAM" in endpoint or "<your-custom" in endpoint):
+                            endpoint = None
+                except Exception:
+                    endpoint = None
                 
     # If no valid endpoint, default to dry-run
     dry_run = args.dry_run or (endpoint is None)
+
 
     print("==================================================")
     print("   REAL-TIME BANKING FRAUD TELEMETRY SIMULATOR    ")
@@ -305,7 +338,25 @@ def main():
         # Sleep according to target TPS
         time.sleep(1.0 / tps)
 
+def generate_sas_token(uri, sas_name, sas_key, expiry=3600):
+    import time
+    import urllib.parse
+    import hmac
+    import hashlib
+    import base64
+    
+    target_uri = urllib.parse.quote_plus(uri)
+    sas = sas_key.encode('utf-8')
+    expiry_time = str(int(time.time() + expiry))
+    string_to_sign = (target_uri + '\n' + expiry_time).encode('utf-8')
+    signed_hmac = hmac.HMAC(sas, string_to_sign, hashlib.sha256)
+    signature = urllib.parse.quote(base64.b64encode(signed_hmac.digest()))
+    return f"SharedAccessSignature sr={target_uri}&sig={signature}&se={expiry_time}&skn={sas_name}"
+
+_producer_client = None
+
 def send_tx(tx, endpoint, dry_run):
+    global _producer_client
     # Print to console colorfully
     color = Fore.WHITE
     if tx["is_fraud"] == 1:
@@ -316,27 +367,55 @@ def send_tx(tx, endpoint, dry_run):
         color = Fore.YELLOW
 
     tx_str = (
-        f"[{tx['timestamp']}] ID: {tx['transaction_id']} | "
-        f"Cust: {tx['customer_name']} | "
-        f"Channel: {tx['payment_channel']:<16} | "
-        f"Amount: Rs. {tx['amount']:<8} | "
-        f"City: {tx['city']:<12} | "
-        f"Risk: {tx['risk_score']}"
+        f"[{tx['timestamp']}] "
+        f"transaction_id: {tx['transaction_id']} | "
+        f"customer_id: {tx['customer_id']} | "
+        f"account_number: {tx['account_number']} | "
+        f"customer_name: {tx['customer_name']:<20} | "
+        f"amount: Rs.{tx['amount']:<10} | "
+        f"merchant: {tx['merchant']:<22} | "
+        f"merchant_category: {tx['merchant_category']:<18} | "
+        f"payment_channel: {tx['payment_channel']:<16} | "
+        f"transaction_type: {tx['transaction_type']:<8} | "
+        f"country: {tx['country']:<6} | "
+        f"city: {tx['city']:<14} | "
+        f"state: {tx['state']:<18} | "
+        f"device_type: {tx['device_type']:<22} | "
+        f"ip_address: {tx['ip_address']:<15} | "
+        f"risk_score: {tx['risk_score']:<3} | "
+        f"is_fraud: {tx['is_fraud']}"
     )
     print(color + tx_str)
 
-    # Perform actual HTTP post if not dry-run
+    # Perform actual push if not dry-run
     if not dry_run and endpoint:
-        if HTTP_SUPPORT:
+        # Check if it is a standard Event Hub connection string
+        if endpoint.startswith("Endpoint=sb://"):
+            if not EVENTHUB_SUPPORT:
+                print(f"{Fore.RED}[SDK ERROR] azure-eventhub package is missing! Please install it by running: pip install azure-eventhub{Style.RESET_ALL}")
+                return
+            
             try:
-                headers = {"Content-Type": "application/json"}
-                response = requests.post(endpoint, data=json.dumps(tx), headers=headers, timeout=2.0)
-                if response.status_code != 200 and response.status_code != 202:
-                    print(f"{Fore.RED}[NETWORK ERROR] Status: {response.status_code}{Style.RESET_ALL}")
+                if _producer_client is None:
+                    _producer_client = EventHubProducerClient.from_connection_string(endpoint)
+                
+                event_data = EventData(json.dumps(tx))
+                # Send the event via secure AMQP binary protocol (completely immune to HTTP/WCF 500 dispatcher bugs!)
+                _producer_client.send_event(event_data)
             except Exception as e:
-                print(f"{Fore.RED}[NETWORK CONNECTION FAILED] {e}{Style.RESET_ALL}")
+                print(f"{Fore.RED}[EVENT HUB SEND FAILED] {e}{Style.RESET_ALL}")
+                _producer_client = None # Clear client to retry connection next time
         else:
-            print(f"{Fore.RED}[HTTP ERROR] requests package missing. Please install dependencies.{Style.RESET_ALL}")
+            if HTTP_SUPPORT:
+                try:
+                    headers = {"Content-Type": "application/json"}
+                    response = requests.post(endpoint, data=json.dumps(tx), headers=headers, timeout=3.0)
+                    if response.status_code != 200 and response.status_code != 201 and response.status_code != 202:
+                        print(f"{Fore.RED}[NETWORK ERROR] Status: {response.status_code} - {response.text}{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.RED}[NETWORK CONNECTION FAILED] {e}{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.RED}[HTTP ERROR] requests package missing. Please install dependencies.{Style.RESET_ALL}")
 
 if __name__ == "__main__":
     try:

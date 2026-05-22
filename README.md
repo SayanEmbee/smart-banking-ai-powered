@@ -1,162 +1,160 @@
-# Real-Time Banking Risk & Fraud Intelligence Solution Accelerator
+# 🛡️ Real-Time Banking Risk & Fraud Intelligence Platform
+### *Enterprise-Grade Fraud Telemetry, Real-Time KQL Scoring, and Generative AI Incident Reasoner*
 
-This solution accelerator delivers a complete, enterprise-grade **Real-Time Banking Risk & Fraud Intelligence Platform** built on Microsoft Fabric and Generative AI. It continuously analyzes live and historical banking transactions through interactive dashboards, detects suspicious activities and fraud patterns in real time, triggers intelligent alerts and automated responses, and provides AI-powered natural language investigation insights for proactive financial decision-making.
+[![Fabric Capacity F2](https://img.shields.io/badge/Microsoft%20Fabric-F2%20Capacity-blue?logo=microsoft)](https://learn.microsoft.com/en-us/fabric/)
+[![AI Models](https://img.shields.io/badge/AI%20Model-Random%20Forest-purple?logo=scikitlearn)](https://scikit-learn.org/)
+[![GenAI Reasoner](https://img.shields.io/badge/GenAI-GPT--4o%20Reasoner-red?logo=openai)](https://openai.com/)
+[![Operational Dashboard](https://img.shields.io/badge/UI-Streamlit%20Console-orange?logo=streamlit)](https://streamlit.io/)
+[![Security Shield](https://img.shields.io/badge/Security-Credentials%20Protected-green?logo=gitlfs)](https://github.com/)
 
-The architecture and framework are easily extendable across retail banking, fintech, insurance, payment systems, and commercial financial institutions for enterprise-scale adoption.
-
----
-
-## 1. Key Business Use Cases & Simulated Attack Vectors
-
-This solution accelerator simulates a high-fidelity retail banking scenario and detects five distinct real-time financial attack vectors:
-
-| Attack Vector | Simulated Scenario | Risk Flag Trigger | Operational Remediation |
-| :--- | :--- | :--- | :--- |
-| **High Value Spike** | Sudden transaction of ₹2,50,000 via a POS channel | Amount exceeding 10x customer standard deviation | Instant transaction hold; automatic analyst alert |
-| **Foreign Geolocation** | Mumbai customer initiating card transactions from Moscow | Concurrent active sessions across disparate countries | Card block; push-notification request to customer app |
-| **ATM Cash Out Burst** | 5 rapid ATM withdrawals totaling ₹95,000 within 2 minutes | High transaction count velocity per minute bounds | Device restriction; temporary card lockdown |
-| **Midnight Account Takeover** | 3:00 AM mobile bank login and transfer from unrecognized IP | Unorthodox login hour + transaction sequence | Multi-factor authorization request to account phone |
-| **New Device Transfer** | IMPS transaction from unregistered device hardware ID | New device signature with high-value velocity | Step-up security confirmation request |
+This solution accelerator delivers a complete, production-ready **Real-Time Banking Risk & Fraud Intelligence Platform** built on Microsoft Fabric and Generative AI. It continuously streams high-velocity transactions, executes sub-second real-time scoring with a dynamic machine learning ensemble classifier, triggers intelligent security responses, and provides AI-powered natural language incident reports.
 
 ---
 
-## 2. Infrastructure Topology (Bicep Provisioned)
+## 🧭 Project Architecture & Data Flow
 
-The accelerator automatically deploys and wires up the following enterprise footprint inside Microsoft Fabric and Azure:
-
-| Resource Name | Service Type | SKU / Tier | Purpose |
-| :--- | :--- | :--- | :--- |
-| **`bankingfabriccapdev`** | Microsoft Fabric Capacity | `F2` | Azure host computing all workspace, Lakehouse, and streaming pipelines |
-| **`SmartBankingRiskWorkspace`** | Microsoft Fabric Workspace | `Standard` | Container organizing all banking assets, notebooks, and database schemas |
-| **`BankingFraudLakehouse`** | Microsoft Fabric Lakehouse | `Delta Lake` | Ingests and registers historical data for batch reporting and ML model training |
-| **`BankingRiskDB`** | Fabric Eventhouse (KQL Database) | `Kusto Engine` | Performs sub-second real-time queries and KPI summaries over transaction streams |
-| **`BankingTransactionStream`** | Fabric Eventstream | `Standard` | Dynamic stream capturing, routing, and filtering simulator telemetry events |
-
----
-
-## 3. Technical Architecture & Data Flow
-
-This accelerator coordinates real-time telemetry streaming and historical batch analytics:
+This platform links high-velocity event telemetry generation, micro-second stream routing, a real-time event database, dynamic AI scoring loops, and a glassmorphism executive control portal:
 
 ```
-                  +----------------------------------------------+
-                  |  Python faker Live Telemetry Generator        |
-                  +----------------------------------------------+
-                                         |
-                                         | (Continuous 1-5 events/sec)
-                                         v
-                  +----------------------------------------------+
-                  |  Microsoft Fabric Eventstream API Endpoint   |
-                  +----------------------------------------------+
-                                         |
-                                         v
-                  +----------------------------------------------+
-                  |  Fabric Eventhouse (KQL Database / Engine)   |
-                  +----------------------------------------------+
-                                   /            \
-                       (KQL Direct Query)      (Real-time stream monitoring)
-                                 /                \
-                                v                  v
-        +----------------------------+      +----------------------------+
-        | Power BI Real-Time Board   |      | Fabric Activator Alerts    |
-        +----------------------------+      +----------------------------+
-                      ^                                    |
-                      |                                    v
-        +----------------------------+      +----------------------------+
-        | AI Risk Scoring Notebook   |      | Automated Email Notification|
-        +----------------------------+      +----------------------------+
+                            [ 🏦 Banking Clients (UPI / ATM / POS) ]
+                                               │
+                                               ▼  (Live Event Telemetry)
+                       ┌───────────────────────────────────────────────┐
+                       │   event_simulator.py (Indian Banking Context) │
+                       └───────────────────────┬───────────────────────┘
+                                               │
+                                               ▼  (AMQP Binary Protocol / REST)
+                       ┌───────────────────────────────────────────────┐
+                       │   Microsoft Fabric Eventstream API Endpoint   │
+                       └───────────────────────┬───────────────────────┘
+                                               │
+                                               ▼
+                       ┌───────────────────────────────────────────────┐
+                       │      Fabric Eventhouse (KQL Database DB)      │
+                       └───────────────┬───────────────────────┬───────┘
+                                       │                       │
+         (Polled Scoped Raw Rows)      ▼                       ▼      (Direct REST Ingestion)
+     ┌───────────────────────────────────┐           ┌───────────────────────────────────┐
+     │   local_scoring_loop.py Daemon    │           │     Streamlit Analytics Portal    │
+     │  (Spark-free Random Forest + Rules)│          │            (src/dashboard/app.py) │
+     └─────────────────┬─────────────────┘           └─────────────────▲─────────────────┘
+                       │                                               │
+                       └──────────────── (Scored Rows) ────────────────┘
 ```
 
 ---
 
-## 4. Directory Structure
+## 🔒 Security First: Secrets & Connection Isolation
 
-The workspace is organized to follow standard Microsoft Solution Accelerator governance practices:
+> [!IMPORTANT]
+> **No Credentials in GitHub!** To ensure absolute compliance with security best practices, all active access keys, connection strings, and service principal secrets are fully decoupled from tracked code and isolated inside a local, Git-ignored environment configuration file.
 
-```
-smart-banking-ai-powered/
-├── config/
-│   └── accelerator-config.json      # Workspace orchestration settings
-├── data/
-│   ├── generate_historical_data.py  # Historical pre-seeded transactions generator
-│   └── historical_credit_card_fraud.csv # 10k generated historical transactions
-├── docs/
-│   └── architecture.md              # Technical architecture details
-├── src/
-│   ├── definitions/
-│   │   └── kql/
-│   │       └── schema.kql           # KQL table schemas and queryset definitions
-│   ├── notebooks/
-│   │   └── fraud_scoring_ai.ipynb   # ML training, heuristics scoring, and AI reasoner
-│   └── simulator/
-│       └── event_simulator.py       # Live transaction stream simulator (Indian context)
-├── requirements.txt                 # Project dependencies list
-└── README.md                        # Master documentation (this file)
+### Secret Isolation System
+1. **`.gitignore` Enforced Protection:**
+   - The workspace includes a strict `.gitignore` file mapping `.env` and `*.env` patterns. These files are never committed or exposed on GitHub.
+2. **Zero-Dependency Dynamic Loaders:**
+   - The **Event Simulator (`event_simulator.py`)**, **Local Scoring Daemon (`local_scoring_loop.py`)**, **Streamlit Dashboard (`app.py`)**, and the **AI Notebook (`fraud_scoring_ai.ipynb`)** are fully equipped with custom environment loaders.
+   - They dynamically check your local `.env` file first, falling back gracefully to non-sensitive placeholders.
+3. **Generic Asset Configurations:**
+   - Config file `config/accelerator-config.json` contains *only* non-sensitive resource IDs (e.g. location, capacitySku, databaseName).
+   - Sensitive fields like `eventstreamCustomEndpoint` and `apiKey` are set to generic templates (`"YOUR_EVENTSTREAM_CUSTOM_ENDPOINT"`).
+
+### Setting Up Your Local Environment Credentials
+To enable live streaming or authenticated database queries, create a `.env` file at the root directory of the workspace using the provided template:
+
+```bash
+cp .env.example .env
 ```
 
-## 5. Execution Pathways
+Open the newly created `.env` file and supply your actual development credentials:
+```env
+# 1. Azure Service Principal (SPN) Credentials for Fabric API Authentication
+AZURE_TENANT_ID="your-entra-tenant-id"
+AZURE_CLIENT_ID="your-spn-application-id"
+AZURE_CLIENT_SECRET="your-spn-client-secret"
 
-Choose **one** of the two pathways below depending on your goal:
-* **Pathway A: Local Sandbox Mode** (Get running locally in 60 seconds with no Azure setup required).
-* **Pathway B: Automated Cloud Deployment** (Provision complete Azure capacity and Fabric workspace items in under 3 minutes).
+# 2. Fabric Custom Eventstream Endpoint (Contains sensitive SharedAccessKey)
+EVENTSTREAM_CUSTOM_ENDPOINT="Endpoint=sb://esehpnntzdoc9blu2kw2m0.servicebus.windows.net/;SharedAccessKeyName=key_xxx;SharedAccessKey=your_key_here=;EntityPath=esehpnntzdoc9blu2kw2m0_eh"
+
+# 3. KQL Database Query Endpoint URI
+KQL_QUERY_URI="https://trd-yourkustoid.location.kusto.fabric.microsoft.com"
+
+# 4. OpenAI API Key for Live Fraud Explanations and Incident Reports
+OPENAI_API_KEY="sk-proj-yourOpenAIKeyHere..."
+```
 
 ---
 
-### Pathway A: Local Sandbox Mode (60-Second Setup)
+## 🚀 Execution Pathways
 
-This mode runs the entire transaction generator and AI notebook locally on your PC. No Azure subscription or active Fabric capacity is needed.
+Select one of the two execution paths to start exploring the accelerator:
 
-#### Step 1: Install Local Python Packages
-Ensure you have Python 3.10+ installed. Open your terminal in the project root and run:
+* **Pathway A: Local Sandbox Mode (60-Second Run)** – Execute the transaction stream generator, local Random Forest model training, heuristic scoring loops, and the live dashboard completely offline with zero Azure setup.
+* **Pathway B: Cloud Fabric Deployment (3-Minute Setup)** – Spin up your Azure Fabric compute capacity (`F2` capacity), auto-provision Fabric workspaces, and wire the live real-time KQL database.
+
+---
+
+### 💻 Pathway A: Local Sandbox Mode
+
+Run a complete simulation loop locally on your machine.
+
+#### 1. Setup Local Environment
+Ensure you have Python 3.10+ installed. Install the solution dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-#### Step 2: Generate the Historical Transaction Database
-Create the 10,000 credit card transaction historical CSV containing 2.39% pre-seeded anomalies:
+#### 2. Seed Historical Dataset
+Generate a high-fidelity historical card transaction database containing 10,000 pre-seeded entries with a 2.39% baseline anomaly rate to train your local models:
 ```bash
 python data/generate_historical_data.py
 ```
-*Output file: `data/historical_credit_card_fraud.csv` (1.78 MB).*
+*Output: `data/historical_credit_card_fraud.csv` (1.78 MB).*
 
-#### Step 3: Launch the Interactive Live Simulator
-Stream simulated Indian banking UPI/ATM/POS transactions directly inside your command line:
+#### 3. Launch the Interactive Telemetry Simulator
+Stream simulated Indian retail banking UPI/ATM/POS transactions dynamically in your terminal:
 ```bash
 python src/simulator/event_simulator.py --dry-run
 ```
+- **Simulator Hotkeys (Keyboard Interactive):**
+  - `+` / `-` : Instantly speed up or slow down the transaction rates (up to 30 events per second).
+  - `1` : Inject a **High-Value Spike Anomaly** (₹2,50,000 POS transaction).
+  - `2` : Inject a **Foreign Geolocation Anismatch** (impossible travel: Hyderabad to Moscow).
+  - `3` : Inject a **Rapid ATM Cash-Out Burst** (skimming/card-cloning pattern).
+  - `4` : Inject a **Midnight Takeover Anomaly** (3:00 AM bank transfer via a Tor exit node).
+  - `q` : Terminate the simulator gracefully.
 
-* **Speed Controls:** Press `+` to accelerate up to 30 TPS, or `-` to slow it down.
-* **Live Fraud Injection Keys:** While the simulator is streaming in the terminal, press any of these keys to inject specific fraud profiles instantly:
-  * Press `1` : Inject a **High-Value Spike** (₹2,50,000 POS transaction).
-  * Press `2` : Inject a **Foreign Location Mismatch** (Hyderabad customer transacting in Moscow).
-  * Press `3` : Inject an **ATM Velocity Burst** (rapid high-value ATM cash-outs).
-  * Press `4` : Inject a **Midnight Account Takeover** (3:00 AM transaction via a Tor node IP).
-  * Press `q` : Safely terminate the stream.
+#### 4. Run the Dynamic AI Scoring Loop & Local Scoring Daemon
+Run the local background scoring engine. It loads your serialized classification model (`models/fraud_forest_model.pkl`), evaluates raw incoming events, applies advanced rulesets, and outputs rich Markdown explanations:
+```bash
+# Trains model from historical data and runs one single scoring sweep
+python src/simulator/local_scoring_loop.py
 
-#### Step 4: Run the AI Risk-Scoring & Explanations Notebook
-Open `src/notebooks/fraud_scoring_ai.ipynb` in VS Code or Jupyter:
-* Runs machine learning classification using `scikit-learn`.
-* Scores live transactions using combined rules + probability matrices.
-* Generates plain-language fraud operations reasoning blocks (mock reasonings are automatically generated if you do not have an active OpenAI API key).
+# Run continuously, checking for unscored transactions every 10 seconds
+python src/simulator/local_scoring_loop.py --loop --interval 10
+```
+
+#### 5. Launch the Streamlit Operational Dashboard
+Open a new terminal session and launch the Obsidian Glass executive dashboard:
+```bash
+streamlit run src/dashboard/app.py
+```
+Your browser will open to the dashboard. The app has high-fidelity mock fallbacks so you can interact with mock metrics, view live maps, trigger alerts, and run the Copilot even if not connected to live Fabric databases.
 
 ---
 
-### Pathway B: Automated Cloud Deployment (Azure & Microsoft Fabric)
+### ☁️ Pathway B: Cloud Fabric Deployment (Azure & Microsoft Fabric)
 
-Use this pathway to deploy the entire, production-grade real-time streaming pipeline inside your active Microsoft Fabric workspace. You can choose to deploy either **automatically via the Azure Developer CLI (`azd`)** or **step-by-step via PowerShell**.
+Orchestrate a fully wired real-time cloud data warehouse and streaming engine inside your Microsoft Fabric workspace.
 
-```
-[Azure CLI Login] ──> [azd up (One-Click Deploy)] ──> [Stream Live Events!]
-```
-
-#### Step 1: Authenticate to Your Azure Tenant
-Make sure you have [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) installed. Open your terminal and sign in:
+#### 1. Log in to Azure Developer CLI & Azure CLI
+Make sure you are authenticated to your Entra ID tenant containing your Microsoft Fabric development capacity:
 ```bash
 az login
 ```
 
-#### Step 2: Configure Your Resource Names
-Open [config/accelerator-config.json](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/config/accelerator-config.json) and set your custom names:
+#### 2. Configure Your Capacity Properties
+Open [config/accelerator-config.json](file:///c:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/config/accelerator-config.json) and set your custom deployment parameters:
 ```json
 {
   "subscriptionId": "YOUR_AZURE_SUBSCRIPTION_ID",
@@ -166,77 +164,72 @@ Open [config/accelerator-config.json](file:///C:/Users/015237/Desktop/MyTest/sma
 }
 ```
 
----
-
-#### Option 1: One-Click deployment via Azure Developer CLI (Recommended)
-If you have [Azure Developer CLI (`azd`)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) installed, you can provision and deploy the entire environment with a single command:
+#### 3. Automated One-Click Deployment via `azd`
+If you have [Azure Developer CLI (`azd`)](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) installed, provision the Azure compute capacity and deploy all Fabric workspace items in one click:
 ```bash
 azd up
 ```
-> **What this does:** `azd` reads the [azure.yaml](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/azure.yaml) file, executes `infra/create-capacity.ps1` as a `preprovision` hook to spin up your Bicep F2 capacity, and then runs `scripts/provision-fabric.ps1` as a `postprovision` hook to orchestrate all Fabric assets and OneLake files!
+* **Under the Hood:** `azd` Bicep scripts deploy your F2 Capacity, create your workspace `SmartBankingRiskWorkspace`, provision OneLake Lakehouse storage, set up the Real-Time Eventhouse, deploy KQL schemas (`schema.kql`), and automatically upload the historical dataset!
 
----
+#### 4. Step-by-Step Shell Deployment
+If you do not have `azd` installed, execute the deployment stages using PowerShell:
 
-#### Option 2: Step-by-Step PowerShell deployment
-If you do not have `azd` installed, execute the steps sequentially in PowerShell:
-
-##### A. Provision Azure Fabric Capacity
 ```powershell
+# A. Provision Fabric capacity in Azure via Bicep Template
 .\infra\create-capacity.ps1
-```
-> **What this does:** Validates your Resource Group, deploys the Microsoft Fabric F2 capacity using your custom **Azure Bicep template** ([infra/main.bicep](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/infra/main.bicep)), and writes the resolved Capacity ID to your configuration.
 
-##### B. Deploy All Fabric Workspace Items
-```powershell
+# B. Auto-deploy and wire workspace items via Fabric REST APIs
 .\scripts\provision-fabric.ps1
 ```
-> **What this does:** Runs fully authenticated Entra ID Fabric REST API calls to:
-> 1. Create or locate the workspace `SmartBankingRiskWorkspace` and bind it to your capacity.
-> 2. Deploy your Lakehouse (`BankingFraudLakehouse`), KQL Database (`BankingRiskDB`), and Eventstream (`BankingTransactionStream`).
-> 3. Stream the 1.78 MB historical CSV dataset directly into OneLake Storage (`Files/` directory).
-> 4. Save all newly resolved Fabric item IDs back to your config file.
 
-#### Step 5: Connect Your Live Stream & Run
-Now that your cloud environment is ready, hook up your local generator:
+#### 5. Connect the Live Eventstream & Stream Telemetry
 1. Open the [Microsoft Fabric Portal](https://app.fabric.microsoft.com/).
-2. Open your new `SmartBankingRiskWorkspace`.
-3. Open `BankingTransactionStream` and select the **Custom App** source node to copy your unique REST API endpoint URL.
-4. Open `config/accelerator-config.json` and paste that URL into the `"eventstreamCustomEndpoint"` field.
-5. Run the simulator to stream live transactions directly into Microsoft Fabric:
+2. Navigate to your new workspace `SmartBankingRiskWorkspace`.
+3. Open `BankingTransactionStream`, select the **Custom App** source node, and copy the unique **REST API Endpoint URL**.
+4. Paste this URL into your `.env` file under `EVENTSTREAM_CUSTOM_ENDPOINT`.
+5. Run the live simulator without the `--dry-run` flag to start feeding Microsoft Fabric:
    ```bash
    python src/simulator/event_simulator.py
    ```
-6. Open your KQL Database (`BankingRiskDB`), execute the query scripts inside [schema.kql](file:///C:/Users/015237/Desktop/MyTest/smart-banking-ai-powered/src/definitions/kql/schema.kql), and start visualizing sub-second operational data!
+6. Paste the query endpoint URI of your KQL database into your `.env` file under `KQL_QUERY_URI`.
+7. Start your local scoring loop daemon (`local_scoring_loop.py --loop`) or run the dashboard (`app.py`) to see real-time updates and interactive charts feed directly from your Fabric cloud database!
 
 ---
 
-## 6. Teardown & Resource Cleanup
+## 🤖 Real-Time Data Agents & Fabric Notebooks
 
-To avoid ongoing charges and keep your subscription clean, you can completely teardown the deployed resources:
+The platform includes two powerful Synapse Spark notebooks that run directly inside Microsoft Fabric to orchestrate automated operations:
 
-### Option 1: Automatic Teardown via Azure Developer CLI
-If you deployed your environment using `azd`, simply run:
-```bash
-azd down --purge --force
-```
-> **What this does:** Automatically deletes all Azure and Fabric capacity objects provisioned under Bicep, cleans up resource records, and purges deployment metadata.
+1. **`rti_notebook_smartbanking_data_agent.ipynb` (Fabric Data Agent):**
+   - Implements the core real-time monitoring agent. It leverages Microsoft Fabric Real-Time Intelligence capabilities to poll incoming Eventstream telemetry, detect critical rule breaches (like midnight IP anomalies), and queue immediate security mitigation webhooks.
+2. **`rti_notebook_myrealtimeaigmbe2.ipynb` (Model Evaluator & AI Orchestrator):**
+   - Manages notebook-driven AI scoring. It reads streaming transaction data from Eventhouse Delta logs, invokes the Random Forest ML classifier, integrates with OpenAI API keys to generate natural language explanations of anomalies, and stores the completed records back into the KQL tables.
 
-### Option 2: Manual Teardown via CLI & Fabric Portal
-1. **Delete Azure Capacity:**
-   ```bash
-   az group delete --name rg-banking-fraud-dev --yes --no-wait
-   ```
-2. **Delete Fabric Workspace:**
-   * Open the Microsoft Fabric portal.
-   * Navigate to `SmartBankingRiskWorkspace` > **Workspace Settings** > **Other** > **Remove this workspace**.
+### Uploading Notebooks to Microsoft Fabric Workspace
+1. In the Microsoft Fabric portal, select the **Synapse Data Engineering** experience.
+2. Click **Import Notebook** in your workspace homepage.
+3. Select `rti_notebook_smartbanking_data_agent.ipynb` and `rti_notebook_myrealtimeaigmbe2.ipynb` from the root directory of this repository to upload them.
+4. Bind the notebooks to your newly created `BankingFraudLakehouse` to give them read/write access to your historical Delta tables.
 
 ---
 
-## 7. Customization & Industry Extendability
+## 🧼 Cleanup & Teardown
 
-This solution accelerator was built as a modular blueprint. You can easily adapt its architecture and codebase to support other industry telemetry scenarios:
+To prevent ongoing charges from your Azure subscription, clean up your resources when done:
 
-* **Retail & E-commerce:** Update `src/simulator/event_simulator.py` to stream shopping cart events (customer_id, checkout_amount, product_category, discount_codes) and trigger alerts on checkout drop-offs or payment processing delays.
-* **Smart Grid & Utilities:** Adjust telemetry fields to represent grid sensor data (meter_id, voltage, current_frequency, grid_temperature) and configure KQL queries to identify local transformer faults or voltage sags.
-* **Fleet Logistics:** Repurpose the schema to capture real-time route details (vehicle_id, latitude, longitude, speed, fuel_rate, brake_status) to proactively flag dangerous driver behavior or engine overheating.
+- **Via `azd`:**
+  ```bash
+  azd down --purge --force
+  ```
+- **Manually:**
+  1. Navigate to the Azure Portal, open your resource group (e.g., `rg-banking-fraud-dev`), and click **Delete Resource Group**.
+  2. In the Microsoft Fabric portal, go to `SmartBankingRiskWorkspace` > **Workspace Settings** > **Other** and click **Remove this workspace**.
 
+---
+
+## 🎨 Design System & Customization
+
+This accelerator is built around modular, well-structured building blocks that make it easy to adapt to other real-time analytics scenarios:
+- **Retail Banking Context:** Customize `src/simulator/event_simulator.py` to stream alternative customer transactions and alert on payment channel compromises.
+- **Logistics & Telematics:** Repurpose the schema in `src/definitions/kql/schema.kql` to represent fleet routing metrics (latitude, longitude, speed, fuel rate, brake temperature) to trigger real-time driver warnings.
+- **Smart Grid Utilities:** Stream smart grid readings (voltage, load demand, transformer heat sensors) to predict local voltage drops or mechanical equipment failures.
