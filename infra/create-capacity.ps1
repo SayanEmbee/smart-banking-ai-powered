@@ -77,54 +77,53 @@ try {
     Write-Warning "Could not fetch signed-in user principal name. Capacity admin might need manual configuration."
 }
 
-# 3. Verify or Create Resource Group
-Write-Host "Checking if Resource Group '$rgName' exists..."
-$rgExists = $false
+# 3. Verify Existing Resource Group and Retrieve Fabric Capacity Details
+Write-Host "Verifying existing Resource Group '$rgName' and Fabric Capacity '$capacityName'..."
+
+$capacityId = ""
 try {
+    # 3.1 Verify Resource Group exists
     az group show --name $rgName -o none
-    $rgExists = $true
-    Write-Host "Resource Group '$rgName' already exists."
+    Write-Host "Resource Group '$rgName' verified successfully."
+    
+    # 3.2 Install microsoft-fabric extension if missing
+    Write-Host "Ensuring Microsoft Fabric CLI extension is installed..."
+    $extensions = az extension list --query "[].name" -o json | ConvertFrom-Json
+    if ("microsoft-fabric" -notin $extensions) {
+        Write-Host "Installing microsoft-fabric extension..."
+        az extension add --name microsoft-fabric -y
+    } else {
+        Write-Host "microsoft-fabric extension is already installed."
+    }
+
+    # 3.3 Query existing Fabric Capacity resource ID
+    Write-Host "Resolving Fabric Capacity ID for '$capacityName'..."
+    try {
+        $capacityId = az fabric capacity show --resource-group $rgName --name $capacityName --query id -o tsv
+        if ($capacityId) {
+            Write-Host "Successfully resolved Fabric Capacity ID in Resource Group '$rgName': $capacityId"
+        }
+    } catch {
+        # Fallback: search across all resource groups in the active subscription
+        Write-Host "Capacity not found in Resource Group '$rgName'. Searching across all resource groups in active subscription..."
+        $searchResult = az fabric capacity list --query "[?name=='$capacityName']" -o json
+        if (-not [string]::IsNullOrEmpty($searchResult) -and $searchResult -ne "[]") {
+            $parsedSearch = $searchResult | ConvertFrom-Json
+            if ($parsedSearch.Count -gt 0 -or $null -ne $parsedSearch.resourceGroup) {
+                $matched = if ($parsedSearch.Count -gt 0) { $parsedSearch[0] } else { $parsedSearch }
+                $rgName = $matched.resourceGroup
+                $capacityId = $matched.id
+                Write-Host "Success! Found capacity '$capacityName' inside Resource Group '$rgName'."
+                Write-Host "Capacity ID: $capacityId"
+            }
+        }
+    }
+    
+    if ([string]::IsNullOrEmpty($capacityId)) {
+        Write-Error "Could not locate Fabric capacity '$capacityName' inside subscription '$subscriptionId'."
+    }
 } catch {
-    Write-Host "Resource Group '$rgName' not found. Creating in location '$location'..."
-    az group create --name $rgName --location $location -o table
-    Write-Host "Resource Group created successfully."
-}
-
-# 4. Install az fabric extension if missing
-Write-Host "Ensuring Microsoft Fabric CLI extension is installed..."
-$extensions = az extension list --query "[].name" -o json | ConvertFrom-Json
-if ("microsoft-fabric" -notin $extensions) {
-    Write-Host "Installing microsoft-fabric extension..."
-    az extension add --name microsoft-fabric -y
-} else {
-    Write-Host "microsoft-fabric extension is already installed."
-}
-
-# 5. Provision / Update Fabric Capacity (Sku: F2) via Bicep
-$bicepPath = Join-Path $PSScriptRoot "main.bicep"
-if (-not (Test-Path $bicepPath)) {
-    Write-Error "Could not locate main.bicep at $bicepPath"
-}
-
-if ([string]::IsNullOrEmpty($adminUser)) {
-    $adminUser = "admin@smartbank.com"
-}
-
-Write-Host "Deploying or updating Fabric Capacity '$capacityName' via Bicep template..."
-Write-Host "This ensures the capacity is fully provisioned and your active user principal ($adminUser) is registered as the Capacity Administrator."
-Write-Host "This process may take 1-3 minutes..."
-
-try {
-    $deployResult = az deployment group create `
-        --resource-group $rgName `
-        --template-file $bicepPath `
-        --parameters capacityName=$capacityName skuName=$sku location=$location adminMembers="['$adminUser']" `
-        --query "properties.outputs.capacityId.value" -o tsv
-        
-    $capacityId = $deployResult
-    Write-Host "Fabric Capacity deployed and updated successfully via Bicep!"
-} catch {
-    Write-Error "Bicep deployment failed: $_"
+    Write-Error "Failed to locate the existing resource group '$rgName' or Fabric capacity '$capacityName' inside subscription '$subscriptionId'. Please verify they exist and that your CLI session has access."
 }
 
 # 6. Save Details back to config file

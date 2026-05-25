@@ -175,7 +175,7 @@ azd up
 If you do not have `azd` installed, execute the deployment stages using PowerShell:
 
 ```powershell
-# A. Provision Fabric capacity in Azure via Bicep Template
+# A. Resolve and register existing Fabric capacity ID (No new Azure resources created)
 .\infra\create-capacity.ps1
 
 # B. Auto-deploy and wire workspace items via Fabric REST APIs
