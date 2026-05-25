@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "capacityName": {
-      "value": "bankingfabriccapdev"
+      "value": "fabricespl01"
     },
     "skuName": {
       "value": "F8"

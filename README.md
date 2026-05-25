@@ -159,7 +159,7 @@ Open [config/accelerator-config.json](file:///c:/Users/015237/Desktop/MyTest/sma
 {
   "subscriptionId": "YOUR_AZURE_SUBSCRIPTION_ID",
   "resourceGroup": "rg-banking-fraud-dev",
-  "capacityName": "bankingfabriccapdev",
+  "capacityName": "fabricespl01",
   "location": "CentralIndia"
 }
 ```
