@@ -57,8 +57,17 @@ if (-not [string]::IsNullOrEmpty($inputSub)) { $subscriptionId = $inputSub.Trim(
 
 # Resource Group Prompt
 $rgName = $config.resourceGroup
-$inputRg = Read-Host "Azure Resource Group Name [default: $rgName]"
-if (-not [string]::IsNullOrEmpty($inputRg)) { $rgName = $inputRg.Trim() }
+if ($deploymentMode -eq "existing") {
+    $inputRg = Read-Host "Azure Resource Group Name (Optional, press Enter for default, or type 'none' to skip) [default: $rgName]"
+    if ($inputRg -eq 'none') {
+        $rgName = ""
+    } elseif (-not [string]::IsNullOrEmpty($inputRg)) {
+        $rgName = $inputRg.Trim()
+    }
+} else {
+    $inputRg = Read-Host "Azure Resource Group Name [default: $rgName]"
+    if (-not [string]::IsNullOrEmpty($inputRg)) { $rgName = $inputRg.Trim() }
+}
 
 # Capacity Name Prompt
 $capacityName = $config.capacityName
@@ -111,11 +120,15 @@ $capacityId = ""
 # 4. Execute Selected Deployment Mode
 if ($deploymentMode -eq "existing") {
     # EXISTING CAPACITY MODE
-    Write-Host "`nVerifying existing Resource Group '$rgName' and Fabric Capacity '$capacityName'..."
     try {
-        # Verify Resource Group exists
-        az group show --name $rgName -o none
-        Write-Host "Resource Group '$rgName' verified successfully."
+        if (-not [string]::IsNullOrEmpty($rgName)) {
+            Write-Host "`nVerifying existing Resource Group '$rgName'..."
+            # Verify Resource Group exists
+            az group show --name $rgName -o none
+            Write-Host "Resource Group '$rgName' verified successfully."
+        } else {
+            Write-Host "`nResource Group not specified. Skipping group verification..."
+        }
         
         # Ensure microsoft-fabric extension is installed
         Write-Host "Ensuring Microsoft Fabric CLI extension is installed..."
@@ -126,15 +139,21 @@ if ($deploymentMode -eq "existing") {
         }
 
         # Query existing Fabric Capacity resource ID
-        Write-Host "Resolving Fabric Capacity ID for '$capacityName'..."
-        try {
-            $capacityId = az fabric capacity show --resource-group $rgName --name $capacityName --query id -o tsv
-            if ($capacityId) {
-                Write-Host "Successfully resolved Fabric Capacity ID in Resource Group '$rgName': $capacityId"
+        if (-not [string]::IsNullOrEmpty($rgName)) {
+            Write-Host "Resolving Fabric Capacity ID for '$capacityName' inside Resource Group '$rgName'..."
+            try {
+                $capacityId = az fabric capacity show --resource-group $rgName --name $capacityName --query id -o tsv
+                if ($capacityId) {
+                    Write-Host "Successfully resolved Fabric Capacity ID in Resource Group '$rgName': $capacityId"
+                }
+            } catch {
+                Write-Host "Capacity not found in Resource Group '$rgName'. Moving to subscription-wide search..."
             }
-        } catch {
-            # Fallback search across all resource groups in the active subscription
-            Write-Host "Capacity not found in Resource Group '$rgName'. Searching all resource groups in subscription..."
+        }
+        
+        # Fallback search across all resource groups in the active subscription
+        if ([string]::IsNullOrEmpty($capacityId)) {
+            Write-Host "Searching for capacity '$capacityName' across all resource groups in subscription..."
             $searchResult = az fabric capacity list --query "[?name=='$capacityName']" -o json
             if (-not [string]::IsNullOrEmpty($searchResult) -and $searchResult -ne "[]") {
                 $parsedSearch = $searchResult | ConvertFrom-Json
