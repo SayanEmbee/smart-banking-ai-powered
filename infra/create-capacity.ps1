@@ -120,58 +120,92 @@ $capacityId = ""
 # 4. Execute Selected Deployment Mode
 if ($deploymentMode -eq "existing") {
     # EXISTING CAPACITY MODE
+    Write-Host "`nResolving existing Fabric Capacity details..."
+    
+    # 1. ALWAYS Try Fabric SaaS API lookup first (Requires ZERO Azure Resource Group or Subscription permissions!)
+    Write-Host "Querying Fabric SaaS capacities list via Fabric REST API..."
     try {
-        if (-not [string]::IsNullOrEmpty($rgName)) {
-            Write-Host "`nVerifying existing Resource Group '$rgName'..."
-            # Verify Resource Group exists
-            az group show --name $rgName -o none
-            Write-Host "Resource Group '$rgName' verified successfully."
+        $fabricToken = az account get-access-token --resource "https://api.fabric.microsoft.com" --query accessToken -o tsv
+        $headers = @{
+            "Authorization" = "Bearer $fabricToken"
+            "Content-Type"  = "application/json"
+        }
+        
+        $res = Invoke-RestMethod -Headers $headers -Uri "https://api.fabric.microsoft.com/v1/capacities" -Method "GET"
+        $capacitiesList = $res.value
+        if ($null -eq $capacitiesList) {
+            $capacitiesList = $res.Body.value
+        }
+        
+        $targetCapacity = $capacitiesList | Where-Object { $_.displayName -eq $capacityName -or $_.id -eq $capacityName }
+        if ($null -ne $targetCapacity) {
+            $capacityId = $targetCapacity.id
+            Write-Host "Success! Found capacity '$capacityName' in Fabric Portal."
+            Write-Host "Capacity ID (GUID): $capacityId"
         } else {
-            Write-Host "`nResource Group not specified. Skipping group verification..."
-        }
-        
-        # Ensure microsoft-fabric extension is installed
-        Write-Host "Ensuring Microsoft Fabric CLI extension is installed..."
-        $extensions = az extension list --query "[].name" -o json | ConvertFrom-Json
-        if ("microsoft-fabric" -notin $extensions) {
-            Write-Host "Installing microsoft-fabric extension..."
-            az extension add --name microsoft-fabric -y
-        }
-
-        # Query existing Fabric Capacity resource ID
-        if (-not [string]::IsNullOrEmpty($rgName)) {
-            Write-Host "Resolving Fabric Capacity ID for '$capacityName' inside Resource Group '$rgName'..."
-            try {
-                $capacityId = az fabric capacity show --resource-group $rgName --name $capacityName --query id -o tsv
-                if ($capacityId) {
-                    Write-Host "Successfully resolved Fabric Capacity ID in Resource Group '$rgName': $capacityId"
-                }
-            } catch {
-                Write-Host "Capacity not found in Resource Group '$rgName'. Moving to subscription-wide search..."
-            }
-        }
-        
-        # Fallback search across all resource groups in the active subscription
-        if ([string]::IsNullOrEmpty($capacityId)) {
-            Write-Host "Searching for capacity '$capacityName' across all resource groups in subscription..."
-            $searchResult = az fabric capacity list --query "[?name=='$capacityName']" -o json
-            if (-not [string]::IsNullOrEmpty($searchResult) -and $searchResult -ne "[]") {
-                $parsedSearch = $searchResult | ConvertFrom-Json
-                if ($parsedSearch.Count -gt 0 -or $null -ne $parsedSearch.resourceGroup) {
-                    $matched = if ($parsedSearch.Count -gt 0) { $parsedSearch[0] } else { $parsedSearch }
-                    $rgName = $matched.resourceGroup
-                    $capacityId = $matched.id
-                    Write-Host "Success! Found capacity '$capacityName' inside Resource Group '$rgName'."
-                    Write-Host "Capacity ID: $capacityId"
-                }
-            }
-        }
-        
-        if ([string]::IsNullOrEmpty($capacityId)) {
-            Write-Error "Could not locate Fabric capacity '$capacityName' inside subscription '$subscriptionId'."
+            Write-Warning "Capacity '$capacityName' not found in Fabric SaaS capacities list. Will try Azure CLI lookup..."
         }
     } catch {
-        Write-Error "Failed to locate the existing resources. Please verify they exist and that your CLI session has access."
+        Write-Warning "Fabric SaaS capacities API query failed: $_. Falling back to Azure CLI lookup..."
+    }
+    
+    # 2. Fallback to Azure CLI lookup (only if SaaS lookup didn't find the capacity ID)
+    if ([string]::IsNullOrEmpty($capacityId)) {
+        Write-Host "Falling back to Azure Resource Manager lookup via Azure CLI..."
+        try {
+            if (-not [string]::IsNullOrEmpty($rgName)) {
+                Write-Host "Verifying Resource Group '$rgName'..."
+                try {
+                    az group show --name $rgName -o none
+                    Write-Host "Resource Group '$rgName' verified successfully."
+                } catch {
+                    Write-Warning "Could not access Resource Group '$rgName' via Azure CLI."
+                }
+            }
+            
+            # Ensure microsoft-fabric extension is installed
+            Write-Host "Ensuring Microsoft Fabric CLI extension is installed..."
+            $extensions = az extension list --query "[].name" -o json | ConvertFrom-Json
+            if ("microsoft-fabric" -notin $extensions) {
+                Write-Host "Installing microsoft-fabric extension..."
+                az extension add --name microsoft-fabric -y
+            }
+
+            # Query existing Fabric Capacity resource ID via CLI show
+            if (-not [string]::IsNullOrEmpty($rgName)) {
+                Write-Host "Resolving Fabric Capacity ID for '$capacityName' inside Resource Group '$rgName'..."
+                try {
+                    $capacityId = az fabric capacity show --resource-group $rgName --name $capacityName --query id -o tsv
+                    if ($capacityId) {
+                        Write-Host "Successfully resolved Fabric Capacity ID in Resource Group '$rgName': $capacityId"
+                    }
+                } catch {
+                    Write-Host "Capacity not found in Resource Group '$rgName'. Moving to subscription-wide search..."
+                }
+            }
+            
+            # Fallback search across all resource groups in the active subscription
+            if ([string]::IsNullOrEmpty($capacityId)) {
+                Write-Host "Searching for capacity '$capacityName' across all resource groups in active subscription..."
+                $searchResult = az fabric capacity list --query "[?name=='$capacityName']" -o json
+                if (-not [string]::IsNullOrEmpty($searchResult) -and $searchResult -ne "[]") {
+                    $parsedSearch = $searchResult | ConvertFrom-Json
+                    if ($parsedSearch.Count -gt 0 -or $null -ne $parsedSearch.resourceGroup) {
+                        $matched = if ($parsedSearch.Count -gt 0) { $parsedSearch[0] } else { $parsedSearch }
+                        $rgName = $matched.resourceGroup
+                        $capacityId = $matched.id
+                        Write-Host "Success! Found capacity '$capacityName' inside Resource Group '$rgName'."
+                        Write-Host "Capacity ID: $capacityId"
+                    }
+                }
+            }
+        } catch {
+            Write-Warning "Azure CLI lookup encountered errors: $_"
+        }
+    }
+    
+    if ([string]::IsNullOrEmpty($capacityId)) {
+        Write-Error "Could not locate Fabric capacity '$capacityName' under your logged-in Fabric or Azure context. Please verify that your account has access to the capacity '$capacityName'."
     }
 } else {
     # NEW CAPACITY MODE
